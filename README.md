@@ -1,2 +1,2 @@
 # maze
-https://oleksandrni.github.io/maze/
+https://digitalimplementer.github.io/maze/
