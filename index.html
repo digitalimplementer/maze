@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>A* Algorithm Example</title>
+    <link rel="stylesheet" type="text/css" href="styles.css" />
+  </head>
+  <body>
+    <h1>A* Algorithm Example</h1>
+    <button id="build-maze-button">Create maze</button>
+    <button id="find-path-button">Find path</button>
+
+    <table id="grid"></table>
+
+    <script>
+      let grid = Array.from({ length: 28 }, () => new Array(40).fill(0));
+      const start = [0, 0];
+      const end = [27, 39];
+
+      class Node {
+        constructor(x, y) {
+          this.x = x;
+          this.y = y;
+          this.g = 0;
+          this.h = 0;
+          this.f = 0;
+          this.parent = null;
+          this.pathCost = 0;
+        }
+
+        equals(other) {
+          return this.x === other.x && this.y === other.y;
+        }
+      }
+
+      function heuristic(node, endNode) {
+        const dx = Math.abs(node.x - endNode.x);
+        const dy = Math.abs(node.y - endNode.y);
+        const diagonalCost = 1;
+        const straightCost = 1;
+
+        // Вычисляем стоимость перемещения по диагонали и вертикали/горизонтали
+        const diagonalSteps = Math.min(dx, dy);
+        const straightSteps = Math.abs(dx - dy);
+
+        // Вычисляем общую стоимость перемещения
+        const cost =
+          diagonalSteps * diagonalCost + straightSteps * straightCost;
+
+        return cost;
+      }
+
+      function getNeighbors(grid, node) {
+        const neighbors = [];
+        const numRows = grid.length;
+        const numCols = grid[0].length;
+        const { x, y } = node;
+
+        // Горизонтальное и вертикальное перемещение
+        if (x > 0 && grid[x - 1][y] !== 1) neighbors.push(new Node(x - 1, y));
+        if (x < numRows - 1 && grid[x + 1][y] !== 1)
+          neighbors.push(new Node(x + 1, y));
+        if (y > 0 && grid[x][y - 1] !== 1) neighbors.push(new Node(x, y - 1));
+        if (y < numCols - 1 && grid[x][y + 1] !== 1)
+          neighbors.push(new Node(x, y + 1));
+
+        // Диагональное перемещение
+        if (x > 0 && y > 0 && grid[x - 1][y - 1] !== 1)
+          neighbors.push(new Node(x - 1, y - 1));
+        if (x > 0 && y < numCols - 1 && grid[x - 1][y + 1] !== 1)
+          neighbors.push(new Node(x - 1, y + 1));
+        if (x < numRows - 1 && y > 0 && grid[x + 1][y - 1] !== 1)
+          neighbors.push(new Node(x + 1, y - 1));
+        if (x < numRows - 1 && y < numCols - 1 && grid[x + 1][y + 1] !== 1)
+          neighbors.push(new Node(x + 1, y + 1));
+
+        return neighbors;
+      }
+
+      function aStar(grid, start, end) {
+        const openList = [];
+        const closedList = [];
+
+        const startNode = new Node(start[0], start[1]);
+        const endNode = new Node(end[0], end[1]);
+
+        startNode.g = 0;
+        startNode.h = heuristic(startNode, endNode);
+        startNode.f = startNode.g + startNode.h;
+
+        openList.push(startNode);
+
+        while (openList.length > 0) {
+          let currentNode = openList[0];
+          let currentIndex = 0;
+
+          // Найти узел с наименьшим значением f
+          for (let i = 1; i < openList.length; i++) {
+            if (openList[i].f < currentNode.f) {
+              currentNode = openList[i];
+              currentIndex = i;
+            }
+          }
+
+          // Переместить текущий узел из открытого списка в закрытый список
+          openList.splice(currentIndex, 1);
+          closedList.push(currentNode);
+
+          // Если найден конечный узел, восстановить путь
+          if (currentNode.equals(endNode)) {
+            const path = [];
+            let current = currentNode;
+            while (current !== null) {
+              path.push([current.x, current.y]);
+              current = current.parent;
+            }
+            return { path: path.reverse(), visited: closedList.slice(1) };
+          }
+
+          const neighbors = getNeighbors(grid, currentNode);
+
+          for (const neighbor of neighbors) {
+            const gScore = currentNode.g + neighbor.pathCost;
+
+            // Пропустить соседей, которые уже находятся в закрытом списке или являются препятствиями
+            if (closedList.some((node) => node.equals(neighbor))) {
+              continue;
+            }
+
+            const openNode = openList.find((node) => node.equals(neighbor));
+
+            // Если сосед не в открытом списке, добавить его
+            if (!openNode) {
+              neighbor.g = gScore;
+              neighbor.h = heuristic(neighbor, endNode);
+              neighbor.f = neighbor.g + neighbor.h;
+              neighbor.parent = currentNode;
+              openList.push(neighbor);
+            } else if (gScore < openNode.g) {
+              // Если новый путь лучше, обновить данные соседа
+              openNode.g = gScore;
+              openNode.f = openNode.g + openNode.h;
+              openNode.parent = currentNode;
+            }
+          }
+        }
+
+        // Если путь не найден
+        return { path: [], visited: closedList };
+      }
+
+      function createGrid(grid) {
+        const table = document.getElementById("grid");
+
+        while (table.firstChild) {
+          table.removeChild(table.firstChild);
+        }
+
+        for (const row of grid) {
+          const tableRow = document.createElement("tr");
+          for (const cellValue of row) {
+            const cell = document.createElement("td");
+
+            if (cellValue === 0) {
+              cell.className = "empty"; // Пустая ячейка
+            } else if (cellValue === 1) {
+              cell.className = "obstacle"; // Препятствие
+            } else if (cellValue === "start") {
+              cell.className = "start"; // Начальная позиция
+              cell.textContent = "S";
+            } else if (cellValue === "end") {
+              cell.className = "end"; // Конечная позиция
+              cell.textContent = "E";
+            }
+
+            tableRow.appendChild(cell);
+          }
+          table.appendChild(tableRow);
+        }
+      }
+
+      function updateGrid(grid, path, visited) {
+        const table = document.getElementById("grid");
+
+        const delay = 4000 / (path.length + visited.length);
+
+        function animateCell(cell, className, delay) {
+          setTimeout(function () {
+            cell.className = className;
+          }, delay);
+        }
+
+        for (let i = 0; i < grid.length; i++) {
+          for (let j = 0; j < grid[i].length; j++) {
+            const cell = table.rows[i].cells[j];
+            const cellValue = grid[i][j];
+
+            if (cellValue === 0) {
+              cell.className = "empty";
+              cell.textContent = "";
+            } else if (cellValue === 1) {
+              cell.className = "obstacle";
+              cell.textContent = "";
+            } else if (cellValue === "start") {
+              cell.className = "start";
+              cell.textContent = "S";
+            } else if (cellValue === "end") {
+              cell.className = "end";
+              cell.textContent = "E";
+            } else {
+              cell.className = "";
+              cell.textContent = grid[i][j].pathCost;
+            }
+          }
+        }
+
+        for (let i = 0; i < visited.length; i++) {
+          const element = visited[i];
+          const cell = table.rows[element.x].cells[element.y];
+          const cellValue = grid[element.x][element.y];
+
+          if (cellValue !== "start" && cellValue !== "end") {
+            const animationDelay = (i + 1) * delay; // Calculate delay for each visited cell
+            animateCell(cell, "visited", animationDelay);
+          }
+        }
+
+        for (let i = 0; i < path.length; i++) {
+          const element = path[i];
+          const cell = table.rows[element[0]].cells[element[1]];
+          const cellValue = grid[element[0]][element[1]];
+
+          if (cellValue !== "start" && cellValue !== "end") {
+            const animationDelay = (visited.length + i + 1) * delay; // Calculate delay for each path cell
+            animateCell(cell, "path", animationDelay);
+          }
+        }
+      }
+
+      function generateMaze(width, height) {
+        // Создаем пустой двумерный массив
+        const grid = [];
+        for (let i = 0; i < height; i++) {
+          grid[i] = [];
+          for (let j = 0; j < width; j++) {
+            grid[i][j] = 1; // Заполняем стены
+          }
+        }
+
+        // Выбираем случайную начальную точку
+        const startX = Math.floor(Math.random() * width);
+        const startY = Math.floor(Math.random() * height);
+        grid[startY][startX] = 0; // Устанавливаем начальную точку
+
+        // Рекурсивная функция для генерации лабиринта
+        function generate(x, y) {
+          const directions = [
+            [0, -2], // Вверх
+            [2, 0], // Вправо
+            [0, 2], // Вниз
+            [-2, 0], // Влево
+          ];
+          directions.sort(() => Math.random() - 0.5); // Случайный порядок направлений
+
+          for (const element of directions) {
+            const direction = element;
+            const nextX = x + direction[0];
+            const nextY = y + direction[1];
+
+            if (
+              nextX >= 0 &&
+              nextX < width &&
+              nextY >= 0 &&
+              nextY < height &&
+              grid[nextY][nextX] === 1
+            ) {
+              grid[y + direction[1] / 2][x + direction[0] / 2] = 0; // Удаляем стену
+              grid[nextY][nextX] = 0; // Удаляем стену
+              generate(nextX, nextY); // Рекурсивно вызываем функцию для следующей ячейки
+            }
+          }
+        }
+
+        generate(startX, startY); // Генерируем лабиринт, начиная с начальной точки
+
+        return grid;
+      }
+
+      grid[start[0]][start[1]] = "start";
+      grid[end[0]][end[1]] = "end";
+      createGrid(grid, start, end);
+
+      function createMaze() {
+        grid = generateMaze(40, 28);
+        grid[start[0]][start[1]] = "start";
+        grid[end[0]][end[1]] = "end";
+        createGrid(grid, start, end);
+      }
+
+      const buildMazeButton = document.getElementById("build-maze-button");
+      buildMazeButton.addEventListener("click", createMaze);
+
+      const findPathButton = document.getElementById("find-path-button");
+      findPathButton.addEventListener("click", function () {
+        const { path, visited } = aStar(grid, start, end);
+        updateGrid(grid, path, visited);
+      });
+    </script>
+  </body>
+</html>
